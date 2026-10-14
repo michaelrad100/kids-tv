@@ -1,4 +1,0 @@
-{ "name": "Rad TV", "short_name": "Rad TV",
-  "description": "A short list of hand-picked videos for the kids, one after another.", "start_url": "./", "scope": "./", "display": "standalone",
-  "background_color": "#1d2550", "theme_color": "#1d2550",
-  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml" }] }

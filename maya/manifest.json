@@ -1,0 +1,22 @@
+{
+ "name": "Maya TV",
+ "short_name": "Maya TV",
+ "description": "Hand-picked videos for Maya, one after another.",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "background_color": "#1d2550",
+ "theme_color": "#1d2550",
+ "icons": [
+  {
+   "src": "icon.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "icon.svg",
+   "sizes": "any",
+   "type": "image/svg+xml"
+  }
+ ]
+}
