@@ -60,7 +60,7 @@
     <section class="shelf">
       <div class="shelf-head"><h3>Your videos</h3><span id="shelf-count"></span></div>
       <div class="stars" id="stars" aria-hidden="true"></div>
-      <ul class="grid" id="grid"></ul>
+      <div id="grid"></div>
       <p class="empty-shelf" id="shelf-empty" hidden>No videos yet. Grown-ups: press and hold the lock to add some.</p>
     </section>
   
@@ -76,6 +76,10 @@
           <div class="row">
             <input id="add-url" type="url" inputmode="url" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Paste a YouTube link" aria-label="YouTube link">
             <button class="go-btn" id="add-go" type="submit">Add</button>
+          </div>
+          <div class="row">
+            <select id="add-topic" aria-label="Topic"></select>
+            <input id="add-topic-new" type="text" autocapitalize="sentences" placeholder="New topic name" aria-label="New topic name" hidden>
           </div>
           <input id="add-code" type="password" autocomplete="off" placeholder="Grown-up code (just once on this device)" aria-label="Grown-up code" hidden>
           ${K.others.map(o => `<label class="also"><input type="checkbox" data-kid="${o.id}"> Add it to ${o.name} TV too</label>`).join("")}
@@ -107,8 +111,12 @@
 
   // The six Time Train line colors; each video takes the next one, so the list reads like a row of bright spines.
   const COLORS = ["#2fb36b", "#f0960e", "#8b5cf6", "#ef4444", "#1e9be8", "#ec4899"];
-  // videos.js rows: [id, title, channel, length]
-  const BASE = (window.VIDEOS || []).map(([id, title, ch, len]) => ({ id, title, ch, len }));
+  // videos.js: { "Topic": [[id, title, channel, length], ...], ... }, topics in the order the shelf shows them.
+  // Videos added from the panel carry their topic; anything without one goes under "More videos".
+  const MORE = "More videos";
+  const V = window.VIDEOS || {};
+  const BASE = (Array.isArray(V) ? [[MORE, V]] : Object.entries(V)).flatMap(([topic, rows]) => rows.map(([id, title, ch, len]) => ({ id, title, ch, len, topic })));
+  const topicOf = (v) => v.topic || MORE;
 
   // ---- storage: keys are tv-<kid>- so each channel keeps its own stars and settings on a shared device ----
   // The grown-up code is the one exception: type it once and every channel on this device knows it.
@@ -130,12 +138,15 @@
   const local = store.get("local", { added: [], hidden: [] });    // added while the server couldn't be reached
   let online = false, code = store.get("code", "");
   const broken = new Set();                                         // won't play here (removed, or embedding off): passed over this visit
-  let list = [], off = [];
+  let list = [], off = [], topics = [];
+  // Grouped by topic (in the order topics first appear), so the videos play through one topic before the next.
   function rebuild() {
     const hidden = new Set([...remote.hidden, ...local.hidden]), seen = new Set(), all = [];
     for (const v of [...BASE, ...remote.added, ...local.added]) if (!seen.has(v.id)) { seen.add(v.id); all.push(v); }
-    list = all.filter(v => !hidden.has(v.id));
-    off = all.filter(v => hidden.has(v.id));
+    const order = [...new Set(all.map(topicOf))], grouped = (a) => order.flatMap(t => a.filter(v => topicOf(v) === t));
+    list = grouped(all.filter(v => !hidden.has(v.id)));
+    off = grouped(all.filter(v => hidden.has(v.id)));
+    topics = order.filter(t => list.some(v => topicOf(v) === t));
   }
   rebuild();
   const current = () => list.find(v => v.id === cur && !broken.has(v.id)) || list.find(v => !watched.has(v.id) && !broken.has(v.id)) || null;
@@ -158,7 +169,8 @@
     if (!v) { paintEmpty(); paintShelf(); return; }
     document.documentElement.style.setProperty("--line", colorOf(v));
     $("board-label").textContent = canWatch() ? (watched.has(v.id) ? "Watch again" : "Now showing") : "Tomorrow";
-    $("count").textContent = `Video ${list.indexOf(v) + 1} of ${list.length}`;
+    const inTopic = list.filter(x => topicOf(x) === topicOf(v));
+    $("count").textContent = `${topicOf(v)} · ${inTopic.indexOf(v) + 1} of ${inTopic.length}`;
     $("title").textContent = v.title;
     if (arrive) { const n = $("title"); n.classList.remove("arrive"); void n.offsetWidth; n.classList.add("arrive"); }
     $("chip").hidden = false;
@@ -197,10 +209,13 @@
     $("stars").innerHTML = list.map(x => `<svg><use href="#${watched.has(x.id) ? "star" : "star-empty"}"/></svg>`).join("");
     $("stars").hidden = !list.length || list.length > 60;
     $("shelf-empty").hidden = !!list.length;
-    $("grid").innerHTML = list.map((x, i) =>
-      `<li data-id="${x.id}" class="${watched.has(x.id) ? "seen" : ""}${x === v ? " here" : ""}" style="--c:${COLORS[i % COLORS.length]}">` +
-      `<svg class="badge"><use href="#star"/></svg><span class="now">Up now</span>` +
-      `<div class="th"><img loading="lazy" alt="" src="${thumb(x.id)}"><small>${esc(x.len || "")}</small></div><b>${esc(x.title)}</b></li>`).join("");
+    $("grid").innerHTML = topics.map(t => {
+      const vids = list.filter(x => topicOf(x) === t), seen = vids.filter(x => watched.has(x.id)).length;
+      return `<h4 class="topic"><span>${esc(t)}</span><small>${seen} of ${vids.length}</small></h4><ul class="grid">` + vids.map(x =>
+        `<li data-id="${x.id}" class="${watched.has(x.id) ? "seen" : ""}${x === v ? " here" : ""}" style="--c:${colorOf(x)}">` +
+        `<svg class="badge"><use href="#star"/></svg><span class="now">Up now</span>` +
+        `<div class="th"><img loading="lazy" alt="" src="${thumb(x.id)}"><small>${esc(x.len || "")}</small></div><b>${esc(x.title)}</b></li>`).join("") + `</ul>`;
+    }).join("");
   }
 
   function showCover(which) {
@@ -363,7 +378,9 @@
     const row = (x, acts) => `<li data-id="${x.id}" class="${x === v ? "here" : ""}"><img loading="lazy" alt="" src="${thumb(x.id, "default")}">` +
       `<div class="t"><b>${watched.has(x.id) ? "★ " : ""}${esc(x.title)}</b><span>${esc(x.ch)}${x.len ? ` · ${x.len}` : ""}</span></div><div class="acts">${acts}</div></li>`;
     $("g-list-head").textContent = `The list (${list.length})`;
-    $("g-list").innerHTML = list.map(x => row(x, `<button data-act="play">Play</button><button class="rm" data-act="remove">Remove</button>`)).join("");
+    $("g-list").innerHTML = topics.map(t => `<li class="g-topic">${esc(t)}</li>` +
+      list.filter(x => topicOf(x) === t).map(x => row(x, `<button data-act="play">Play</button><button class="rm" data-act="remove">Remove</button>`)).join("")).join("");
+    paintTopics();
     $("g-off-wrap").hidden = !off.length;
     $("g-off-head").textContent = `Taken off the list (${off.length})`;
     $("g-off").innerHTML = off.map(x => row(x, `<button data-act="restore">Put back</button>`)).join("");
@@ -371,6 +388,15 @@
       ? `Videos you add here show up on every device that opens ${K.name} TV.`
       : "Couldn't reach the shared list just now, so videos you add are saved on this device only.";
   }
+  // Topic picker: the channel's topics (last one used first), plus a new one.
+  function paintTopics() {
+    const sel = $("add-topic"), was = sel.value, last = store.get("lastTopic", "");
+    const names = [...new Set([...(topics.includes(last) ? [last] : []), ...topics, ...off.map(topicOf)])];
+    sel.innerHTML = names.map(t => `<option>${esc(t)}</option>`).join("") + `<option value="__new">New topic…</option>`;
+    sel.value = names.includes(was) || was === "__new" ? was : names[0] || "__new";
+    $("add-topic-new").hidden = sel.value !== "__new";
+  }
+  $("add-topic").addEventListener("change", () => { $("add-topic-new").hidden = $("add-topic").value !== "__new"; if (!$("add-topic-new").hidden) $("add-topic-new").focus(); });
   const closeSheets = () => document.querySelectorAll(".sheet-bg").forEach(x => x.classList.remove("show"));
   document.querySelectorAll("[data-close]").forEach(b => b.onclick = closeSheets);
   document.querySelectorAll(".sheet-bg").forEach(bg => bg.addEventListener("click", (e) => { if (e.target === bg) closeSheets(); }));
@@ -422,7 +448,11 @@
     const id = videoId($("add-url").value);
     if (!id) return addMsg("That doesn't look like a YouTube link.", "err");
     const also = [...document.querySelectorAll(".also input:checked")].map(b => b.dataset.kid);
-    if (list.some(v => v.id === id) && !also.length) return addMsg("That one's already on the list.", "err");
+    const topic = ($("add-topic").value === "__new" ? $("add-topic-new").value : $("add-topic").value).trim().slice(0, 60);
+    if (!topic) { $("add-topic-new").focus(); return addMsg("Give the new topic a name.", "err"); }
+    // One added from the panel can be added again under another topic to move it; videos.js ones stay where that file puts them.
+    const on = list.find(v => v.id === id);
+    if (on && !also.length && (topicOf(on) === topic || BASE.includes(on))) return addMsg(`That one's already on the list, under ${topicOf(on)}.`, "err");
     if (online && !code) {
       const c = $("add-code").value.trim();
       if (!c) { $("add-code").hidden = false; $("add-code").focus(); return addMsg("Type the grown-up code once, then tap Add.", "err"); }
@@ -432,7 +462,7 @@
     try {
       let title;
       if (online) {
-        const j = await call("/add", { url: id, also });
+        const j = await call("/add", { url: id, also, topic });
         took(j); store.set("code", code); $("add-code").value = "";
         title = (j.video || remote.added.find(v => v.id === id) || {}).title;
       } else {
@@ -440,13 +470,14 @@
         const o = await (await fetch(`https://noembed.com/embed?url=https://www.youtube.com/watch?v=${id}`)).json();
         if (o.error) throw new Error("That video can't play outside YouTube, or the link is wrong.");
         local.hidden = local.hidden.filter(x => x !== id);
-        if (!local.added.some(v => v.id === id)) local.added.push({ id, title: o.title, ch: o.author_name, len: "" });
+        if (!local.added.some(v => v.id === id)) local.added.push({ id, title: o.title, ch: o.author_name, len: "", topic });
         store.set("local", local); title = o.title;
       }
       const wasDone = !current();
       rebuild(); $("add-url").value = "";
       const to = also.length && online ? ` to ${[K.name, ...also.map(k => K.others.find(o => o.id === k).name)].map(n => `${n} TV`).join(" and ")}` : "";
-      addMsg(`Added “${title || "the video"}”${to}.`, "ok");
+      addMsg(`Added “${title || "the video"}” to ${topic}${to ? `, on ${to.slice(4)}` : ""}.`, "ok");
+      store.set("lastTopic", topic); $("add-topic-new").value = "";
       document.querySelectorAll(".also input").forEach(b => { b.checked = false; });
       paintGrown();
       if (wasDone || !busy()) paint();

@@ -43,7 +43,8 @@
     background: radial-gradient(circle, var(--amber) 1.6px, transparent 2.2px) 0 0 / 14px 4px repeat-x; opacity: .55; }
   .board .row { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
   .board .label { font-family: var(--sign); color: var(--amber); font-size: 14px; letter-spacing: .06em; }
-  .board .count { font-size: 14px; color: #c6cbe6; white-space: nowrap; margin-left: auto; font-variant-numeric: tabular-nums; }
+  .board .label { flex-shrink: 0; }
+  .board .count { font-size: 14px; color: #c6cbe6; white-space: nowrap; margin-left: auto; font-variant-numeric: tabular-nums; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .board .title { font-family: var(--sign); font-weight: 400; font-size: clamp(22px, 6vw, 34px); line-height: 1.1; margin: 8px 0 12px; text-wrap: balance;
     overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
   .board .title.arrive { animation: flip .5s ease; }
@@ -147,6 +148,10 @@
     background: var(--amber); color: var(--ink); padding: 3px 9px; border-radius: 999px; box-shadow: 0 2px 0 #d69d12; white-space: nowrap; }
   .grid li.here .now { display: block; }
   .empty-shelf { margin: 0; color: var(--muted); font-size: 15px; }
+  /* a heading per topic, with how many in it have a star */
+  .topic { display: flex; align-items: baseline; gap: 10px; margin: 18px 2px 10px; font-family: var(--sign); font-weight: 400; font-size: 15px; letter-spacing: .03em; }
+  .topic:first-child { margin-top: 2px; }
+  .topic small { margin-left: auto; font-family: var(--body); font-weight: 800; font-size: 13px; color: var(--muted); white-space: nowrap; }
 
   .foot { text-align: center; font-size: 14px; color: var(--muted); padding: 2px 8px 6px; font-weight: 700; }
   .foot a { color: var(--muted); text-underline-offset: 3px; }
@@ -195,6 +200,8 @@
   .g-list .acts button { font-size: 13px; font-weight: 900; padding: 7px 10px; border-radius: 10px; background: var(--rule); }
   .g-list .acts button.rm { color: #b42318; background: #fde8e7; }
   .g-list.off li { opacity: .7; }
+  .g-list li.g-topic { background: none; border: 0; padding: 8px 2px 0; font-weight: 900; font-size: 14px; color: var(--muted); }
+  .add select { flex: 1; min-width: 0; font: inherit; font-size: 16px; font-weight: 700; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--rule); background: var(--paper); color: var(--ink); }
   .fine { font-size: 13px; color: var(--muted); margin: 0; }
   details.off-wrap summary { cursor: pointer; font-weight: 800; font-size: 15px; padding: 6px 0; }
 

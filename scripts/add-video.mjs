@@ -1,16 +1,20 @@
-// Adds YouTube links to the end of a channel's videos.js and bumps its ?v= in that channel's index.html so iPads fetch the new list.
-//   node scripts/add-video.mjs <mala|maya|both> <link> [<link> ...]
-// Looks up the title, channel and length, and skips videos already on that list or whose owner doesn't allow embedding.
+// Adds YouTube links under a topic in a channel's videos.js, and bumps its ?v= in that channel's index.html so iPads fetch the new list.
+//   node scripts/add-video.mjs <mala|maya|both> "<topic>" <link> [<link> ...]
+// A new topic goes at the end of the shelf. Looks up the title, channel and length, and skips videos already on that
+// channel's list or whose owner doesn't allow embedding. Flags any that YouTube doesn't mark family-safe.
 
 import fs from "node:fs";
 import path from "node:path";
+import vm from "node:vm";
 import { fileURLToPath } from "node:url";
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ALL = fs.readdirSync(root).filter(d => fs.existsSync(path.join(root, d, "videos.js")));
-const [which, ...links] = process.argv.slice(2);
+const [which, topic, ...links] = process.argv.slice(2);
 const kids = which === "both" ? ALL : [which];
-if (!which || !kids.every(k => ALL.includes(k)) || !links.length) { console.log(`usage: node scripts/add-video.mjs <${[...ALL, "both"].join("|")}> <link> [<link> ...]`); process.exit(1); }
+if (!which || !kids.every(k => ALL.includes(k)) || !topic || !links.length) {
+  console.log(`usage: node scripts/add-video.mjs <${[...ALL, "both"].join("|")}> "<topic>" <link> [<link> ...]`); process.exit(1);
+}
 
 const ID = /^[\w-]{11}$/;
 function videoId(url) {
@@ -44,24 +48,28 @@ async function lookup(link) {
   return r;
 }
 
+// videos.js is a header comment plus window.VIDEOS = { "Topic": [rows], ... }. It's read by running it and written back whole.
+const write = (head, topics) => head + "window.VIDEOS = {\n" + Object.entries(topics).map(([t, rows]) =>
+  `  ${JSON.stringify(t)}: [\n${rows.map(r => `    [${r.map(x => JSON.stringify(x)).join(", ")}],\n`).join("")}  ],\n`).join("") + "};\n";
+
 for (const kid of kids) {
   const FILE = path.join(root, kid, "videos.js"), INDEX = path.join(root, kid, "index.html");
-  let src = fs.readFileSync(FILE, "utf8");
-  const have = new Set([...src.matchAll(/^\s*\["([\w-]{11})"/gm)].map(m => m[1]));
+  const src = fs.readFileSync(FILE, "utf8"), box = { window: {} };
+  vm.runInNewContext(src, box);
+  const topics = box.window.VIDEOS || {};
+  const have = new Set(Object.values(topics).flat().map(r => r[0]));
   const rows = [];
   for (const link of links) {
     const v = await lookup(link);
     if (v.skip) { console.log(`${kid}  skip  ${v.skip}`); continue; }
     if (have.has(v.id)) { console.log(`${kid}  skip  ${v.id}: already on the list`); continue; }
-    rows.push(`  [${v.row.map(x => JSON.stringify(x)).join(", ")}],`);
-    have.add(v.id);
+    rows.push(v.row); have.add(v.id);
     console.log(`${kid}  add   ${v.id}: ${v.row[1]} (${v.row[2]}, ${v.row[3] || "length unknown"})${v.familySafe ? "" : "  ⚠ YouTube doesn't mark this one family-safe"}`);
   }
   if (rows.length) {
-    src = src.replace(/\n\];\s*$/, "\n" + rows.join("\n") + "\n];\n");
-    fs.writeFileSync(FILE, src);
-    const html = fs.readFileSync(INDEX, "utf8").replace(/videos\.js\?v=(\d+)/, (_, n) => `videos.js?v=${+n + 1}`);
-    fs.writeFileSync(INDEX, html);
+    (topics[topic] ||= []).push(...rows);
+    fs.writeFileSync(FILE, write(src.slice(0, src.indexOf("window.VIDEOS")), topics));
+    fs.writeFileSync(INDEX, fs.readFileSync(INDEX, "utf8").replace(/videos\.js\?v=(\d+)/, (_, n) => `videos.js?v=${+n + 1}`));
   }
-  console.log(`${kid}  ${rows.length} added.`);
+  console.log(`${kid}  ${rows.length} added to "${topic}".`);
 }
