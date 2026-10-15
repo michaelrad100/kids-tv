@@ -6,4 +6,5 @@ window.VIDEOS = [
   ["bIaq4HUD3jo", "The Very First Living Thing!", "SciShow Kids", "5:44"],
   ["2rcS9JuFICY", "The Very Long Time of the Dinosaurs!", "SciShow Kids", "5:57"],
   ["oXwoy-Ce1ZE", "What Happened to the Dinosaurs?", "SciShow Kids", "4:39"],
+  ["EPULVR8dVE8", "Halloween decorations with paper easy [Paper cutting DIY]", "Helpful Arts & Crafts", "14:35"],
 ];
